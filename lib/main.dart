@@ -85,20 +85,51 @@ class TodoProvider extends ChangeNotifier {
 
   //Markera som färdig elelr ej färdigt
   Future<void> todoDone(Todo todo, bool value) async {
+    final originalDoneStatus = todo.done;
     todo.done = value;
     notifyListeners();
-    await http.put(
+    
+    try {
+      final response = await http.put(
       Uri.parse("$baseUrl/${todo.id}?key=$apiKey"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode(todo.toJson()),
-    );
+      body: jsonEncode({'title': todo.title, 'done': todo.done}),
+      );
+      if (response.statusCode != 200){ //om det inte gick att uppdatera på servern
+        todo.done = originalDoneStatus;
+        notifyListeners();
+      } 
+      else {
+        await fetchTodos();
+      }
+    } catch (e) { // om nätverksfel inträffar
+      todo.done = originalDoneStatus;
+      notifyListeners();
+    }
   }
 
   //ta bort todo
   Future<void> deleteTodo(Todo todo) async {
+    final originalTodo = List<Todo>.from(_todos);
     _todos.remove(todo);
     notifyListeners();
-    await http.delete(Uri.parse("$baseUrl/${todo.id}?key=$apiKey"));
+
+    try {
+      final response = await http.delete(
+        Uri.parse("$baseUrl/${todo.id}?key=$apiKey"),
+      );
+      if (response.statusCode != 200) {
+        _todos.clear();
+        _todos.addAll(originalTodo);
+        notifyListeners();
+      } else {
+        await fetchTodos();
+      }
+    } catch (e) {
+      _todos.clear();
+      _todos.addAll(originalTodo);
+      notifyListeners();
+    }
   }
 
   void setFilter(String newFilter) {
@@ -323,6 +354,8 @@ class _AddTodoPageState extends State<AddTodoPage> {
             Center(
               child: TextButton.icon( //Vad som händer när man klickar på ADD knappen, samt dens färg
                 onPressed: () {
+                 
+                  
                   if (controller.text.isNotEmpty) {
                     Navigator.pop(context, controller.text); //skicka tillbaka texten
                   }
